@@ -1,0 +1,389 @@
+/* Skate Shop — frontend-only interactions. Data is stored in this browser. */
+const CART_KEY = "skateShopCart";
+const MESSAGES_KEY = "skateShopMessages";
+let cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
+
+const money = amount => new Intl.NumberFormat("en-PH", {
+  style: "currency", currency: "PHP", minimumFractionDigits: 2
+}).format(amount);
+
+function saveCart() {
+  localStorage.setItem(CART_KEY, JSON.stringify(cart));
+  renderCart();
+}
+function showToast(message) {
+  document.getElementById("toastMessage").textContent = message;
+  bootstrap.Toast.getOrCreateInstance(document.getElementById("siteToast"), { delay: 2300 }).show();
+}
+function addToCart(button) {
+  const id = button.dataset.id;
+  const item = cart.find(product => product.id === id);
+  if (item) item.quantity += 1;
+  else cart.push({ id, name: button.dataset.name, price: Number(button.dataset.price), quantity: 1 });
+  saveCart();
+  showToast(`${button.dataset.name} added to your cart.`);
+}
+function renderCart() {
+  const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  document.getElementById("cartCount").textContent = count;
+  document.getElementById("cartTotal").textContent = money(total);
+  const container = document.getElementById("cartItems");
+  if (!cart.length) {
+    container.innerHTML = '<p class="cart-empty">Your cart is empty.</p>';
+    return;
+  }
+  container.innerHTML = cart.map(item => `
+    <div class="cart-row">
+      <div><strong>${escapeHTML(item.name)}</strong><small>${item.quantity} × ${money(item.price)}</small></div>
+      <div class="text-end"><strong>${money(item.price * item.quantity)}</strong>
+        <button class="remove-item" data-remove="${item.id}" aria-label="Remove ${escapeHTML(item.name)}"><i class="bi bi-trash3"></i></button>
+      </div>
+    </div>`).join("");
+}
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[char]));
+}
+
+document.querySelectorAll(".add-cart").forEach(button => {
+  button.addEventListener("click", () => addToCart(button));
+});
+document.getElementById("cartItems").addEventListener("click", event => {
+  const removeButton = event.target.closest("[data-remove]");
+  if (!removeButton) return;
+  cart = cart.filter(item => item.id !== removeButton.dataset.remove);
+  saveCart();
+});
+document.getElementById("checkoutButton").addEventListener("click", () => {
+  if (!cart.length) return showToast("Your cart is empty.");
+  showToast("This is a frontend demo. Checkout is not connected to payments.");
+});
+
+const carousel = document.getElementById("categoryCarousel");
+document.getElementById("categoryPrev").addEventListener("click", () => carousel.scrollBy({ left: -240, behavior: "smooth" }));
+document.getElementById("categoryNext").addEventListener("click", () => carousel.scrollBy({ left: 240, behavior: "smooth" }));
+
+// Pointer/touch drag-to-scroll category carousel.
+let isDown = false, startX = 0, scrollStart = 0, dragged = false;
+carousel.addEventListener("pointerdown", event => {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  isDown = true; dragged = false; startX = event.clientX; scrollStart = carousel.scrollLeft;
+  carousel.classList.add("dragging");
+});
+window.addEventListener("pointerup", () => { isDown = false; carousel.classList.remove("dragging"); });
+carousel.addEventListener("pointermove", event => {
+  if (!isDown) return;
+  const delta = event.clientX - startX;
+  if (Math.abs(delta) > 5) dragged = true;
+  carousel.scrollLeft = scrollStart - delta;
+});
+carousel.addEventListener("click", event => {
+  if (dragged) { event.preventDefault(); event.stopPropagation(); }
+}, true);
+
+document.querySelectorAll(".category-card").forEach(card => {
+  card.addEventListener("click", () => {
+    const category = card.dataset.category;
+    const input = document.getElementById("searchInput");
+    input.value = category === "Apparel" || category === "Wheels" ? "" : category;
+    filterProducts(input.value);
+    if (category === "Apparel" || category === "Wheels") showToast(`${category} products will be added to the catalog soon.`);
+  });
+});
+
+function filterProducts(query) {
+  const normalized = query.trim().toLowerCase();
+  let visible = 0;
+  document.querySelectorAll(".product-column").forEach(card => {
+    const matches = !normalized || card.dataset.name.toLowerCase().includes(normalized) || card.dataset.category.toLowerCase().includes(normalized);
+    card.classList.toggle("d-none", !matches);
+    if (matches) visible++;
+  });
+  document.getElementById("emptySearch").classList.toggle("d-none", visible !== 0);
+}
+document.getElementById("searchForm").addEventListener("submit", event => {
+  event.preventDefault();
+  filterProducts(document.getElementById("searchInput").value);
+  document.getElementById("products").scrollIntoView({ behavior: "smooth" });
+});
+document.getElementById("searchInput").addEventListener("input", event => filterProducts(event.target.value));
+
+document.getElementById("contactForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const messages = JSON.parse(localStorage.getItem(MESSAGES_KEY) || "[]");
+  messages.push({
+    name: form.elements.name.value.trim(),
+    email: form.elements.email.value.trim(),
+    message: form.elements.message.value.trim(),
+    sentAt: new Date().toISOString()
+  });
+  localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages));
+  form.reset();
+  showToast("Message saved in this browser. Thanks for reaching out!");
+});
+
+document.getElementById("menuToggle").addEventListener("click", () => {
+  document.getElementById("mainNav").classList.toggle("open");
+});
+document.querySelectorAll(".main-nav a").forEach(link => {
+  link.addEventListener("click", () => document.getElementById("mainNav").classList.remove("open"));
+});
+document.getElementById("year").textContent = new Date().getFullYear();
+renderCart();
+
+ :root {
+  --bg: #292929; --panel: #323232; --panel-2: #202020; --text: #f5f5f5;
+  --muted: #b8b8b8; --accent: #695cf6; --accent-hover: #8177ff; --line: rgba(255,255,255,.15);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 85px; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: "Inter", sans-serif; font-size: 14px; line-height: 1.7; }
+a { color: inherit; text-decoration: none; }
+.site-header { position: sticky; top: 0; z-index: 1000; background: rgba(25,25,25,.96); border-bottom: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(12px); }
+.header-inner { min-height: 76px; padding: 10px clamp(18px, 4vw, 64px); display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.profile-link { display: block; width: 48px; height: 48px; border-radius: 50%; border: 2px solid #eee; overflow: hidden; flex: 0 0 auto; }
+.profile-link img { width: 100%; height: 100%; object-fit: cover; }
+.main-nav { display: flex; align-items: center; justify-content: center; gap: clamp(14px, 2vw, 30px); margin-left: auto; }
+.main-nav a { text-transform: uppercase; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #eee; transition: color .2s; }
+.main-nav a:hover, .text-link:hover { color: var(--accent-hover); }
+.search-box { display: flex; align-items: center; gap: 8px; width: min(230px, 22vw); min-width: 155px; background: #f5f5f5; border-radius: 30px; padding: 5px 10px; color: #292929; }
+.search-box input { border: 0; outline: 0; min-width: 0; width: 100%; background: transparent; color: #222; font-size: 11px; }
+.search-box button { border: 0; background: transparent; color: #292929; padding: 0 3px; }
+.cart-button { border: 1px solid var(--line); border-radius: 30px; background: transparent; color: #fff; padding: 8px 12px; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.cart-button b { background: var(--accent); border-radius: 50%; min-width: 20px; height: 20px; display: grid; place-items: center; font-size: 10px; }
+.mobile-menu { display: none; color: #fff; font-size: 25px; padding: 0; }
+.hero-section { padding: 48px 0 62px; background: radial-gradient(ellipse at 15% 30%, rgba(105,92,246,.12), transparent 35%), var(--bg); }
+.main-logo { width: min(270px, 72%); aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: 3px solid #ed252d; box-shadow: 0 0 0 7px rgba(255,255,255,.04); }
+.eyebrow, .hero-tagline { text-transform: uppercase; font-family: "Barlow Condensed", sans-serif; font-weight: 700; letter-spacing: .2em; }
+.eyebrow { font-size: 22px; }.hero-tagline { color: var(--muted); font-size: 12px; letter-spacing: .08em; }
+.section-kicker { color: #a59fff; font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: .2em; }
+.section-heading h1, .section-title { font-family: "Barlow Condensed", sans-serif; font-weight: 800; text-transform: uppercase; line-height: .98; letter-spacing: .02em; }
+.section-heading h1 { font-size: clamp(42px, 5vw, 66px); margin: 8px 0; }.section-heading h1 span, .section-title span { color: var(--accent-hover); }
+.section-heading p { color: var(--muted); font-size: 13px; }
+.compact-heading { margin-bottom: 22px; }.compact-heading h1 { font-size: clamp(38px, 4vw, 54px); }
+.category-carousel-wrap { position: relative; padding: 0 24px; }
+.category-carousel { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; cursor: grab; user-select: none; padding: 4px 2px 12px; }
+.category-carousel::-webkit-scrollbar { display: none; }.category-carousel.dragging { cursor: grabbing; scroll-snap-type: none; }
+.category-card { flex: 0 0 23%; min-width: 112px; scroll-snap-align: start; text-align: center; }
+.category-card img { display: block; width: 100%; height: 132px; object-fit: cover; border-radius: 8px; background: #fff; border: 1px solid var(--line); transition: transform .25s, border-color .25s; }
+.category-card:hover img { transform: translateY(-5px); border-color: var(--accent-hover); }
+.category-card span { display: block; margin-top: 9px; text-transform: uppercase; font-family: "Barlow Condensed", sans-serif; font-size: 16px; font-weight: 700; letter-spacing: .08em; }
+.carousel-arrow { position: absolute; top: 42%; transform: translateY(-50%); z-index: 2; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: #191919; color: white; display: grid; place-items: center; }
+.carousel-arrow:hover { background: var(--accent); }.carousel-arrow.prev { left: -2px; }.carousel-arrow.next { right: -2px; }
+.btn-skate { background: var(--accent); border: 1px solid var(--accent); color: #fff; border-radius: 7px; padding: 9px 22px; text-transform: uppercase; letter-spacing: .07em; font-size: 11px; font-weight: 700; transition: .2s; }
+.btn-skate:hover, .btn-skate:focus { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; transform: translateY(-1px); }
+.section-pad { padding: 76px 0; }.about-section { background: #242424; }
+.about-image-frame { border: 1px solid var(--line); padding: 7px; background: #303030; }
+.about-image-frame img { display: block; width: 100%; height: 300px; object-fit: cover; }
+.image-caption { color: var(--muted); font-family: "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .2em; font-size: 12px; text-align: center; margin-top: 10px; }
+.section-title { font-size: clamp(36px, 4vw, 52px); margin: 9px 0 18px; }.about-section p { color: #d0d0d0; font-size: 12px; line-height: 1.9; }
+.text-link { display: inline-block; margin-top: 8px; color: #fff; text-transform: uppercase; font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.products-section { background: var(--bg); }.section-heading { margin-bottom: 35px; }
+.product-card { height: 100%; border: 1px solid var(--line); background: #2e2e2e; transition: border-color .2s, transform .2s; }
+.product-card:hover { border-color: rgba(129,119,255,.8); transform: translateY(-4px); }
+.product-image { height: 300px; padding: 15px; display: grid; place-items: center; background: #f4f4f4; overflow: hidden; }
+.product-image img { width: 100%; height: 100%; object-fit: contain; }
+.product-info { padding: 18px; display: flex; justify-content: space-between; align-items: end; gap: 12px; }
+.product-category { color: #a59fff; text-transform: uppercase; letter-spacing: .15em; font-size: 9px; font-weight: 700; }
+.product-info h3 { font-family: "Barlow Condensed", sans-serif; font-size: 23px; text-transform: uppercase; margin: 3px 0; }
+.product-price { color: #ddd; font-size: 12px; margin: 0; }.product-info .btn { white-space: nowrap; padding: 8px 12px; font-size: 9px; }
+.empty-search { text-align: center; color: var(--muted); padding: 30px; }
+.contact-section { background: #242424; }.contact-content { max-width: 960px; margin: 0 auto; }
+.contact-item { display: flex; align-items: center; gap: 18px; margin: 24px 0; }
+.contact-icon { width: 42px; height: 42px; border-radius: 50%; background: rgba(105,92,246,.15); color: #8c83ff; display: grid; place-items: center; font-size: 20px; flex: 0 0 auto; }
+.contact-item h3 { font-family: "Barlow Condensed", sans-serif; text-transform: uppercase; font-size: 16px; letter-spacing: .08em; margin: 0 0 2px; }.contact-item p { color: var(--muted); font-size: 12px; margin: 0; }.social-link:hover .contact-icon { background: var(--accent); color: #fff; }
+.contact-form { display: grid; gap: 12px; }.contact-form .form-control { border: 1px solid #555; background: #eee; color: #222; border-radius: 4px; font-size: 12px; padding: 12px 14px; }.contact-form .form-control:focus { border-color: var(--accent-hover); box-shadow: 0 0 0 .2rem rgba(105,92,246,.2); }
+.contact-form textarea { resize: vertical; }.form-note { color: #999; font-size: 10px; margin: 0; text-align: center; }
+.site-footer { background: #191919; padding: 20px 0; color: #aaa; font-size: 11px; }.site-footer .bi-heart-fill { color: #ed3944; }
+.cart-panel { background: #252525; color: #fff; }.cart-panel .offcanvas-title { font-family: "Barlow Condensed", sans-serif; text-transform: uppercase; font-size: 28px; }
+.cart-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding: 13px 0; }.cart-row strong { display: block; font-size: 12px; }.cart-row small { color: var(--muted); }.remove-item { border: 0; background: transparent; color: #ff7777; font-size: 18px; }
+.cart-total { display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 18px; padding-top: 18px; }.cart-empty { color: var(--muted); text-align: center; padding: 25px 0; }
+@media (max-width: 767.98px) {
+  .header-inner { min-height: 66px; gap: 12px; }.profile-link { width: 40px; height: 40px; }.mobile-menu { display: block; order: 2; margin-left: auto; }.main-nav { display: none; position: absolute; top: 66px; left: 0; right: 0; padding: 18px 22px; background: #1c1c1c; border-bottom: 1px solid var(--line); flex-direction: column; align-items: flex-start; gap: 16px; }.main-nav.open { display: flex; }.search-box { width: min(190px, 42vw); min-width: 0; order: 3; }.cart-button { order: 4; padding: 7px 9px; }.cart-button span { display: none; }
+  .hero-section { padding: 38px 0 48px; }.main-logo { width: 210px; }.hero-brand { margin-bottom: 8px; }.category-card { flex-basis: 36%; }.category-card img { height: 145px; }.section-pad { padding: 58px 0; }.about-image-frame img { height: 230px; }.product-image { height: 250px; }.product-info { align-items: flex-start; flex-direction: column; }.product-info .btn { width: 100%; }
+}
+@media (min-width: 768px) and (max-width: 991.98px) { .category-card { flex-basis: 30%; }.main-nav { gap: 13px; }.main-nav a { font-size: 10px; } }
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Skate Shop — skateboards, parts, apparel and street culture.">
+  <title>Skate Shop | Ride Your Way</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container-fluid header-inner">
+      <a class="profile-link" href="#contact" aria-label="Profile and contact">
+        <img src="assets/profile.jpg" alt="Skate Shop profile avatar">
+      </a>
+      <button class="mobile-menu btn" id="menuToggle" aria-label="Toggle navigation"><i class="bi bi-list"></i></button>
+      <nav class="main-nav" id="mainNav">
+        <a href="#home">Home</a><a href="#about">About</a><a href="#categories">Us</a>
+        <a href="#products">Product</a><a href="#contact">Contact</a>
+      </nav>
+      <form class="search-box" id="searchForm" role="search">
+        <i class="bi bi-search"></i>
+        <input id="searchInput" type="search" placeholder="Search products..." aria-label="Search products">
+        <button type="submit" aria-label="Submit search"><i class="bi bi-arrow-right"></i></button>
+      </form>
+      <button class="cart-button" id="cartButton" type="button" data-bs-toggle="offcanvas" data-bs-target="#cartPanel" aria-label="Open shopping cart">
+        <i class="bi bi-bag"></i><span>Cart</span><b id="cartCount">0</b>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero-section" id="home">
+      <div class="container">
+        <div class="row align-items-center g-4">
+          <div class="col-lg-5 text-center hero-brand">
+            <img class="main-logo" src="assets/logo.jpg" alt="Skate Shop logo">
+            <p class="eyebrow mt-3 mb-1">Skate Shop</p>
+            <p class="hero-tagline">Skate every day. Keep rolling.</p>
+          </div>
+          <div class="col-lg-7">
+            <div class="section-heading compact-heading">
+              <span class="section-kicker">Find your setup</span>
+              <h1>Gear up. <span>Roll out.</span></h1>
+              <p>Everything you need for your next session.</p>
+            </div>
+            <div class="category-carousel-wrap">
+              <button class="carousel-arrow prev" id="categoryPrev" aria-label="Scroll categories left"><i class="bi bi-chevron-left"></i></button>
+              <div class="category-carousel" id="categoryCarousel">
+                <a class="category-card" href="#products" data-category="Decks"><img src="assets/decks.jpg" alt="Skateboard decks"><span>Decks</span></a>
+                <a class="category-card" href="#products" data-category="Trucks"><img src="assets/trucks.jpg" alt="Skateboard trucks"><span>Trucks</span></a>
+                <a class="category-card" href="#products" data-category="Wheels"><img src="assets/wheels.jpg" alt="Skateboard wheels"><span>Wheels</span></a>
+                <a class="category-card" href="#products" data-category="Apparel"><img src="assets/apparel.jpg" alt="Skate apparel hoodie"><span>Apparel</span></a>
+              </div>
+              <button class="carousel-arrow next" id="categoryNext" aria-label="Scroll categories right"><i class="bi bi-chevron-right"></i></button>
+            </div>
+            <div class="text-center text-lg-end mt-3"><a class="btn btn-skate" href="#products">Shop now <i class="bi bi-arrow-up-right"></i></a></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="about-section section-pad" id="about">
+      <div class="container">
+        <div class="row align-items-center g-4 g-lg-5">
+          <div class="col-lg-6">
+            <div class="about-image-frame"><img src="assets/shop-interior.jpg" alt="Inside the Skate Shop"></div>
+            <p class="image-caption">A place for every skater.</p>
+          </div>
+          <div class="col-lg-6">
+            <span class="section-kicker">Who we are</span>
+            <h2 class="section-title">About <span>the shop</span></h2>
+            <p>Welcome to Skate Shop, your home for skateboarding, street culture, and creativity.</p>
+            <p>We are passionate about providing skateboarders of all ages and skill levels with quality skateboards, wheels, trucks, apparel, accessories, and other essential gear. Whether you're a beginner learning your first tricks or an experienced skater looking to improve your setup, we're here to support your journey.</p>
+            <p>Our goal is to create a friendly and welcoming community where skateboarders can ride, learn, express themselves, and have fun. We believe skateboarding is more than just a sport—it is a lifestyle that encourages confidence, creativity, freedom and friendship.</p>
+            <a href="#contact" class="text-link">Get in touch <i class="bi bi-arrow-up-right"></i></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="products-section section-pad" id="products">
+      <div class="container">
+        <div class="section-heading text-center">
+          <span class="section-kicker">Made for your next session</span>
+          <h2 class="section-title">Featured <span>products</span></h2>
+          <p>Skate essentials picked for the streets and the park.</p>
+        </div>
+        <div class="row g-4 justify-content-center" id="productGrid">
+          <div class="col-sm-10 col-md-6 col-lg-5 product-column" data-name="Darkstar Deck" data-category="Decks">
+            <article class="product-card">
+              <div class="product-image"><img src="assets/darkstar-deck.jpg" alt="Darkstar skateboard deck"></div>
+              <div class="product-info">
+                <div><span class="product-category">Decks</span><h3>Darkstar Deck</h3><p class="product-price">₱2,990.00</p></div>
+                <button class="btn btn-skate add-cart" data-id="darkstar" data-name="Darkstar Deck" data-price="2990"><i class="bi bi-bag-plus"></i> Add to cart</button>
+              </div>
+            </article>
+          </div>
+          <div class="col-sm-10 col-md-6 col-lg-5 product-column" data-name="Venture Trucks" data-category="Trucks">
+            <article class="product-card">
+              <div class="product-image"><img src="assets/venture-trucks.jpg" alt="Venture skateboard trucks"></div>
+              <div class="product-info">
+                <div><span class="product-category">Trucks</span><h3>Venture Trucks</h3><p class="product-price">₱2,450.00</p></div>
+                <button class="btn btn-skate add-cart" data-id="venture" data-name="Venture Trucks" data-price="2450"><i class="bi bi-bag-plus"></i> Add to cart</button>
+              </div>
+            </article>
+          </div>
+        </div>
+        <p class="empty-search d-none" id="emptySearch">No matching products found. Try another search.</p>
+      </div>
+    </section>
+
+    <section class="contact-section section-pad" id="contact">
+      <div class="container">
+        <div class="section-heading text-center">
+          <span class="section-kicker">Questions, ideas, or just saying hi?</span>
+          <h2 class="section-title">Contact <span>us</span></h2>
+        </div>
+        <div class="row g-5 align-items-center contact-content">
+          <div class="col-lg-5">
+            <div class="contact-item"><span class="contact-icon"><i class="bi bi-telephone-fill"></i></span><div><h3>Contact No.</h3><p>+63 9XX XXX XXXX</p></div></div>
+            <div class="contact-item"><span class="contact-icon"><i class="bi bi-envelope"></i></span><div><h3>Email Us!</h3><p>skateshop@example.com</p></div></div>
+            <a class="contact-item social-link" href="https://www.facebook.com/" target="_blank" rel="noopener"><span class="contact-icon"><i class="bi bi-facebook"></i></span><div><h3>Facebook</h3><p>Skate Shop</p></div></a>
+          </div>
+          <div class="col-lg-7">
+            <form id="contactForm" class="contact-form">
+              <label class="visually-hidden" for="contactName">Name</label>
+              <input id="contactName" name="name" class="form-control" placeholder="Name" required>
+              <label class="visually-hidden" for="contactEmail">Email address</label>
+              <input id="contactEmail" name="email" type="email" class="form-control" placeholder="Email Address" required>
+              <label class="visually-hidden" for="contactMessage">Message</label>
+              <textarea id="contactMessage" name="message" class="form-control" rows="5" placeholder="Message" required></textarea>
+              <button class="btn btn-skate w-100" type="submit">Send now <i class="bi bi-send"></i></button>
+              <p class="form-note">Demo form: messages are saved only in this browser.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="container d-flex flex-column flex-md-row justify-content-between gap-2"><span>© <span id="year"></span> Skate Shop. Ride your way.</span><span>Built for the skate community <i class="bi bi-heart-fill"></i></span></div></footer>
+
+  <div class="offcanvas offcanvas-end cart-panel" tabindex="-1" id="cartPanel" aria-labelledby="cartTitle">
+    <div class="offcanvas-header"><h2 class="offcanvas-title" id="cartTitle">Your cart</h2><button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button></div>
+    <div class="offcanvas-body"><div id="cartItems" class="cart-items"><p class="cart-empty">Your cart is empty.</p></div><div class="cart-total"><span>Total</span><strong id="cartTotal">₱0.00</strong></div><button class="btn btn-skate w-100 mt-3" id="checkoutButton">Continue</button><p class="form-note mt-3">Demo cart only. No payment is processed.</p></div>
+  </div>
+  <div class="toast-container position-fixed bottom-0 end-0 p-3"><div id="siteToast" class="toast text-bg-dark border-0" role="status"><div class="d-flex"><div class="toast-body" id="toastMessage">Added to cart.</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
+
+SKATE SHOP FRONTEND WEBSITE
+
+Files:
+- index.html: page structure and Bootstrap imports
+- styles.css: custom dark skate-shop styling and responsive layout
+- script.js: carousel drag, product search, cart, and contact form storage
+- assets/: your uploaded images assigned to the requested sections
+
+HOW TO RUN
+1. Extract the ZIP file.
+2. Open the skate-shop-website folder in Visual Studio Code.
+3. Open index.html in a browser, or use the VS Code Live Server extension.
+4. Internet is required for Bootstrap CDN, Bootstrap Icons, and Google Fonts.
+
+FRONTEND-ONLY NOTES
+- Cart items are stored in localStorage under skateShopCart.
+- Contact form submissions are stored in localStorage under skateShopMessages.
+- No server, database, authentication, or payment processing is connected.
+- Replace the sample contact phone, email, and Facebook page with your actual details.
+- Edit product names and prices in index.html.
